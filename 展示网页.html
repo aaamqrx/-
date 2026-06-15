@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能数据分析与决策支持系统 · 中国电影市场</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2128; --line:#30363d;
+    --txt:#e6edf3; --sub:#8b949e; --accent:#58a6ff; --accent2:#bc8cff;
+    --ok:#3fb950; --warn:#d29922; --bad:#f85149;
+    --grad:linear-gradient(135deg,#58a6ff 0%,#bc8cff 100%);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{font-family:"Microsoft YaHei","PingFang SC",-apple-system,sans-serif;
+    background:var(--bg);color:var(--txt);line-height:1.8;-webkit-font-smoothing:antialiased}
+  ::selection{background:var(--accent);color:#fff}
+
+  /* ===== 导航 ===== */
+  nav{position:sticky;top:0;z-index:100;background:rgba(13,17,23,.85);
+    backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+  nav .wrap{max-width:1100px;margin:0 auto;padding:0 24px;display:flex;
+    align-items:center;height:60px;gap:8px;flex-wrap:wrap}
+  nav .brand{font-weight:700;font-size:15px;background:var(--grad);
+    -webkit-background-clip:text;background-clip:text;color:transparent;margin-right:auto}
+  nav a{color:var(--sub);text-decoration:none;font-size:13px;padding:6px 12px;
+    border-radius:6px;transition:.2s;white-space:nowrap}
+  nav a:hover{color:var(--txt);background:var(--panel2)}
+
+  /* ===== Hero ===== */
+  .hero{max-width:1100px;margin:0 auto;padding:80px 24px 50px;text-align:center}
+  .hero .tag{display:inline-block;font-size:13px;color:var(--accent);
+    border:1px solid var(--accent);border-radius:20px;padding:4px 16px;margin-bottom:24px;
+    background:rgba(88,166,255,.08)}
+  .hero h1{font-size:42px;line-height:1.3;margin-bottom:20px;letter-spacing:1px}
+  .hero h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.sub{font-size:17px;color:var(--sub);max-width:680px;margin:0 auto 32px}
+  .meta-grid{display:flex;justify-content:center;gap:0;flex-wrap:wrap;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    max-width:720px;margin:0 auto;overflow:hidden}
+  .meta-grid div{padding:16px 28px;border-right:1px solid var(--line);font-size:14px}
+  .meta-grid div:last-child{border-right:none}
+  .meta-grid .k{color:var(--sub);font-size:12px;display:block;margin-bottom:4px}
+  .meta-grid .v{color:var(--txt);font-weight:600}
+
+  /* ===== 数字概览 ===== */
+  .stats{max-width:1100px;margin:40px auto;padding:0 24px;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:24px;text-align:center;transition:.25s}
+  .stat:hover{border-color:var(--accent);transform:translateY(-3px)}
+  .stat .num{font-size:34px;font-weight:800;background:var(--grad);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .stat .lbl{font-size:13px;color:var(--sub);margin-top:6px}
+
+  /* ===== 章节 ===== */
+  section{max-width:1100px;margin:0 auto;padding:60px 24px;scroll-margin-top:70px}
+  .sec-head{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+  .sec-head .no{font-size:13px;font-weight:700;color:#fff;background:var(--grad);
+    width:34px;height:34px;border-radius:9px;display:flex;align-items:center;
+    justify-content:center;flex-shrink:0}
+  .sec-head h2{font-size:27px;letter-spacing:.5px}
+  .sec-sub{color:var(--sub);font-size:14px;margin-bottom:32px;padding-left:48px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:28px;margin-bottom:22px}
+  .card h3{font-size:18px;margin-bottom:14px;color:var(--txt);
+    display:flex;align-items:center;gap:8px}
+  .card h3::before{content:"";width:4px;height:18px;background:var(--grad);border-radius:2px}
+  .card p{color:#c9d1d9;font-size:14.5px;margin-bottom:12px}
+  .card p:last-child{margin-bottom:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .grid2-13{display:grid;grid-template-columns:1fr 1.6fr;gap:22px}
+
+  ul.clean{list-style:none;margin:8px 0}
+  ul.clean li{padding:8px 0 8px 26px;position:relative;color:#c9d1d9;font-size:14px;
+    border-bottom:1px dashed var(--line)}
+  ul.clean li:last-child{border-bottom:none}
+  ul.clean li::before{content:"▸";position:absolute;left:4px;color:var(--accent)}
+  ul.clean li b{color:var(--txt)}
+
+  /* ===== 流程管线 ===== */
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin-top:8px}
+  .pipe .step{flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--line);
+    padding:14px 16px;position:relative}
+  .pipe .step:not(:last-child){border-right:none}
+  .pipe .step .n{font-size:11px;color:var(--accent);font-weight:700}
+  .pipe .step .t{font-size:14px;font-weight:600;margin:4px 0}
+  .pipe .step .d{font-size:12px;color:var(--sub);line-height:1.5}
+  .pipe .step:first-child{border-radius:10px 0 0 10px}
+  .pipe .step:last-child{border-radius:0 10px 10px 0}
+
+  /* ===== CSS 图表 ===== */
+  .chart{margin:10px 0}
+  .bar-row{display:flex;align-items:center;gap:12px;margin:10px 0}
+  .bar-row .name{width:90px;font-size:13px;color:var(--sub);text-align:right;flex-shrink:0}
+  .bar-track{flex:1;background:var(--panel2);border-radius:6px;height:30px;
+    overflow:hidden;position:relative}
+  .bar-fill{height:100%;border-radius:6px;display:flex;align-items:center;
+    justify-content:flex-end;padding-right:10px;font-size:12px;font-weight:600;color:#fff;
+    transition:width 1.2s cubic-bezier(.2,.8,.2,1);min-width:fit-content}
+  .bar-fill.b1{background:linear-gradient(90deg,#1f6feb,#58a6ff)}
+  .bar-fill.b2{background:linear-gradient(90deg,#8957e5,#bc8cff)}
+  .bar-fill.bg{background:linear-gradient(90deg,#238636,#3fb950)}
+  .bar-fill.bo{background:linear-gradient(90deg,#9e6a03,#d29922)}
+  .bar-fill.br{background:linear-gradient(90deg,#da3633,#f85149)}
+  .chart-cap{font-size:12px;color:var(--sub);text-align:center;margin-top:10px}
+
+  /* ===== 表格 ===== */
+  table{width:100%;border-collapse:collapse;margin:6px 0;font-size:14px}
+  th,td{padding:11px 14px;text-align:center;border-bottom:1px solid var(--line)}
+  th{background:var(--panel2);color:var(--txt);font-weight:600;font-size:13px}
+  td{color:#c9d1d9}
+  tr:hover td{background:var(--panel2)}
+  td.win{color:var(--ok);font-weight:700}
+  td.lose{color:var(--bad)}
+  .metric-pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;
+    background:var(--panel2);color:var(--sub);margin:2px}
+
+  /* ===== 图片 ===== */
+  .img-wrap{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:12px;text-align:center;overflow:hidden}
+  .img-wrap img{max-width:100%;height:auto;border-radius:6px;display:block;margin:0 auto;
+    background:#fff}
+  .img-wrap .cap{font-size:12.5px;color:var(--sub);margin-top:10px;line-height:1.6}
+  .img-fallback{display:none;padding:30px;color:var(--warn);font-size:13px}
+
+  /* ===== 标签云 ===== */
+  .tag-cloud{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+  .tg{padding:6px 14px;border-radius:18px;font-size:13px;border:1px solid var(--line);
+    background:var(--panel2)}
+  .tg.s1{border-color:#58a6ff;color:#58a6ff} .tg.s2{border-color:#bc8cff;color:#bc8cff}
+  .tg.s3{border-color:#3fb950;color:#3fb950} .tg.s4{border-color:#d29922;color:#d29922}
+  .tg.s5{border-color:#f85149;color:#f85149} .tg.s6{border-color:#8b949e;color:#8b949e}
+
+  .note{background:rgba(210,153,34,.08);border:1px solid var(--warn);border-radius:10px;
+    padding:16px 20px;font-size:13.5px;color:#e3b341;margin-top:16px}
+  .note b{color:#f0c674}
+
+  .two-col{column-count:2;column-gap:28px}
+
+  /* ===== 结论 ===== */
+  .concl{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .concl .item{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:10px;padding:18px 20px}
+  .concl .item .h{font-weight:700;font-size:15px;margin-bottom:6px;color:var(--txt)}
+  .concl .item .b{font-size:13.5px;color:var(--sub);line-height:1.7}
+
+  /* ===== VS 对比 ===== */
+  .vs-table th:nth-child(2){color:#58a6ff} .vs-table th:nth-child(3){color:#bc8cff}
+  .vs-table td:first-child{text-align:right;color:var(--sub);font-weight:600}
+
+  footer{text-align:center;padding:50px 24px;color:var(--sub);font-size:13px;
+    border-top:1px solid var(--line);margin-top:40px}
+
+  @media(max-width:820px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .grid2,.grid2-13,.concl{grid-template-columns:1fr}
+    .hero h1{font-size:30px} .two-col{column-count:1}
+    .meta-grid div{border-right:none;border-bottom:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 导航 ===== -->
+<nav><div class="wrap">
+  <span class="brand">🎬 中国电影市场智能分析系统</span>
+  <a href="#s1">问题定义</a>
+  <a href="#s2">数据分析</a>
+  <a href="#s3">模型预测</a>
+  <a href="#s4">智能分析</a>
+  <a href="#s5">实验结论</a>
+  <a href="#s6">心得体会</a>
+</div></nav>
+
+<!-- ===== Hero ===== -->
+<header class="hero">
+  <span class="tag">计算思维与人工智能 · 期末大作业</span>
+  <h1>智能数据分析与<span class="g">决策支持系统</span><br>以中国电影市场数据为例</h1>
+  <p class="sub">融合<b>数据统计分析</b>、<b>传统机器学习预测</b>与<b>大模型语义分析</b>三大模块，
+    对中国电影的市场热度与口碑进行多维度预判与解读。</p>
+  <div class="meta-grid">
+    <div><span class="k">姓名</span><span class="v">李志鹏</span></div>
+    <div><span class="k">学号</span><span class="v">32502493</span></div>
+    <div><span class="k">专业班级</span><span class="v">人工智能 2501</span></div>
+    <div><span class="k">指导老师</span><span class="v">李甜</span></div>
+  </div>
+</header>
+
+<!-- ===== 数字概览 ===== -->
+<div class="stats">
+  <div class="stat"><div class="num">16,750</div><div class="lbl">有效电影记录</div></div>
+  <div class="stat"><div class="num">27</div><div class="lbl">覆盖影片类型</div></div>
+  <div class="stat"><div class="num">~40</div><div class="lbl">模型输入特征</div></div>
+  <div class="stat"><div class="num">39</div><div class="lbl">大模型语义标签</div></div>
+</div>
+
+<!-- ===== 一、问题定义 ===== -->
+<section id="s1">
+  <div class="sec-head"><span class="no">01</span><h2>问题定义</h2></div>
+  <div class="sec-sub">阐述选题背景与分析目标</div>
+
+  <div class="card">
+    <h3>选题背景</h3>
+    <p>电影产业是文化消费的重要组成部分，一部电影的市场表现（票房、口碑）受到多重因素影响：
+      上映档期、前期宣传热度、影片内容质量与时长等。对片方和发行方而言，如果能在上映前就对一部电影的
+      市场反响做出预判，便能更科学地安排排片计划、宣发预算和档期选择。</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>五个核心研究问题</h3>
+      <ul class="clean">
+        <li>评分与受关注度（评价人数）存在怎样的<b>关系</b>？</li>
+        <li>不同<b>档期</b>的电影表现是否有显著差异？</li>
+        <li>上映前<b>百度搜索指数</b>能否预测最终受关注度？</li>
+        <li>能否用客观特征<b>预测</b>评价人数与评分？</li>
+        <li>大模型能挖掘哪些<b>超越类型标签</b>的内容特征？</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>三个层面的分析目标</h3>
+      <ul class="clean">
+        <li><b>描述层面</b>：刻画市场整体分布特征</li>
+        <li><b>预测层面</b>：构建回归模型预测热度与口碑</li>
+        <li><b>智能层面</b>：大模型语义打标 + 档期题材分析</li>
+      </ul>
+      <p style="margin-top:14px;font-size:13px;color:var(--sub)">
+        数据通过<b style="color:var(--accent)">自建爬虫</b>从豆瓣采集，覆盖 27 个类型，
+        经清洗、去重、关联百度指数后形成最终数据集 <code style="color:#bc8cff">china_all.xlsx</code>。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 二、数据分析 ===== -->
+<section id="s2">
+  <div class="sec-head"><span class="no">02</span><h2>数据获取与探索性分析</h2></div>
+  <div class="sec-sub">数据清洗 · 描述性统计 · 可视化（对应要求 1）</div>
+
+  <div class="card">
+    <h3>六阶段数据清洗管线</h3>
+    <div class="pipe">
+      <div class="step"><div class="n">STEP 1</div><div class="t">原始采集</div><div class="d">按 27 类型抓取豆瓣榜单，每类最多 2000 部</div></div>
+      <div class="step"><div class="n">STEP 2</div><div class="t">地区过滤</div><div class="d">保留中国大陆／香港／台湾影片，留存细分类型标签</div></div>
+      <div class="step"><div class="n">STEP 3</div><div class="t">HTML 缓存</div><div class="d">下载详情页解析片长、导演、剧情简介</div></div>
+      <div class="step"><div class="n">STEP 4</div><div class="t">百度指数</div><div class="d">抓取上映前 7 天逐日搜索指数</div></div>
+      <div class="step"><div class="n">STEP 5</div><div class="t">指数解析</div><div class="d">计算均值/标准差/斜率/最大/最小 5 个统计量</div></div>
+      <div class="step"><div class="n">STEP 6</div><div class="t">详情合并</div><div class="d">提取结构化字段，合并为最终数据集</div></div>
+    </div>
+  </div>
+
+  <div class="grid2-13">
+    <div class="card">
+      <h3>描述性统计</h3>
+      <table>
+        <tr><th>指标</th><th>均值</th><th>中位数</th><th>标准差</th></tr>
+        <tr><td>豆瓣评分</td><td>6.27</td><td>6.50</td><td>1.51</td></tr>
+        <tr><td>评价人数</td><td>52,925</td><td>4,637</td><td>156,444</td></tr>
+        <tr><td>百度指数</td><td>8,799</td><td>2,264</td><td>—</td></tr>
+      </table>
+      <p style="font-size:12.5px;color:var(--sub);margin-top:10px">
+        百度指数基于 6,950 条有效记录统计。</p>
+    </div>
+    <div class="card">
+      <h3>评价人数：典型长尾分布（均值 ≫ 中位数）</h3>
+      <div class="chart">
+        <div class="bar-row"><span class="name">均值</span>
+          <div class="bar-track"><div class="bar-fill b1" style="width:100%">52,925</div></div></div>
+        <div class="bar-row"><span class="name">中位数</span>
+          <div class="bar-track"><div class="bar-fill b2" style="width:8.8%">4,637</div></div></div>
+      </div>
+      <p style="font-size:13.5px;margin-top:14px">均值是中位数的 <b style="color:var(--accent)">11 倍</b>，
+        说明少数爆款电影占据了绝大部分关注度。这正是建模时必须对目标变量做
+        <b style="color:#bc8cff">log1p 对数变换</b>的根本原因——否则几部百万级爆款会主导整个损失函数。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>三张核心可视化图表</h3>
+    <div class="grid2" style="grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div class="img-wrap">
+        <img src="doban-data/analysis/output/scatter_rating_vs_reviews.png" alt="评分vs评价人数散点图"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ 图片未找到<br>doban-data/analysis/output/<br>scatter_rating_vs_reviews.png</div>
+        <div class="cap"><b>图1　评分 vs 评价人数</b><br>评价人数越多，评分越高且越稳定；小众影片评分两极分化</div>
+      </div>
+      <div class="img-wrap">
+        <img src="doban-data/analysis/output/bar_schedule_comparison.png" alt="档期对比柱状图"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ 图片未找到<br>doban-data/analysis/output/<br>bar_schedule_comparison.png</div>
+        <div class="cap"><b>图2　不同档期表现对比</b><br>春节档平均关注度显著高于普通周末，但评分差异小</div>
+      </div>
+      <div class="img-wrap">
+        <img src="doban-data/analysis/output/correlation_baidu_vs_reviews.png" alt="百度指数相关性图"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ 图片未找到<br>doban-data/analysis/output/<br>correlation_baidu_vs_reviews.png</div>
+        <div class="cap"><b>图3　百度指数 vs 评价人数</b><br>呈明显正相关，前期热度可转化为实际关注</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 三、模型实现 ===== -->
+<section id="s3">
+  <div class="sec-head"><span class="no">03</span><h2>传统机器学习模型构建与评估</h2></div>
+  <div class="sec-sub">Scikit-learn · 线性回归 vs 随机森林（对应要求 2）</div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>两个回归任务</h3>
+      <ul class="clean">
+        <li><b>任务 A</b>：预测评价人数（市场热度代理，反映票房潜力）</li>
+        <li><b>任务 B</b>：预测豆瓣评分（质量代理，反映口碑）</li>
+      </ul>
+      <h3 style="margin-top:20px">约 40 个输入特征</h3>
+      <ul class="clean">
+        <li><b>档期特征</b>（5个）：春节/国庆/五一/暑期/普通周末</li>
+        <li><b>数值特征</b>（6个）：百度指数均值/标准差/斜率/最大/最小 + 片长</li>
+        <li><b>类型特征</b>（约28个）：豆瓣细分类型 one-hot 编码</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>两个对比模型</h3>
+      <p><b style="color:var(--accent)">线性回归</b>（基线）：假设线性关系，可解释性强，
+        用于验证问题是否存在简单线性结构。</p>
+      <p><b style="color:var(--accent2)">随机森林</b>（主力）：100 棵决策树集成，
+        能捕捉非线性关系与特征交互，对异常值更鲁棒。</p>
+      <div class="tag-cloud" style="margin-top:14px">
+        <span class="tg s1">n_estimators=100</span>
+        <span class="tg s2">max_depth=10</span>
+        <span class="tg s3">5折交叉验证</span>
+        <span class="tg s4">8:2 划分</span>
+        <span class="tg s6">log1p 变换</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>评估结果 · 任务 A：预测评价人数</h3>
+    <table>
+      <tr><th>模型</th><th>RMSE ↓</th><th>MAE ↓</th><th>R² ↑</th><th>MAPE ↓</th></tr>
+      <tr><td>线性回归</td><td>2,919,466</td><td>220,925</td><td class="lose">-209.6</td><td>386.7%</td></tr>
+      <tr><td><b>随机森林</b></td><td>141,093</td><td>48,554</td><td class="win">0.508</td><td>116.3%</td></tr>
+    </table>
+    <div class="chart" style="margin-top:18px">
+      <div class="bar-row"><span class="name">RF (测试集)</span>
+        <div class="bar-track"><div class="bar-fill bg" style="width:50.8%">R² = 0.508</div></div></div>
+      <div class="bar-row"><span class="name">RF (交叉验证)</span>
+        <div class="bar-track"><div class="bar-fill b2" style="width:75%">R² = 0.75</div></div></div>
+      <div class="bar-row"><span class="name">线性回归</span>
+        <div class="bar-track"><div class="bar-fill br" style="width:2%">R² = -209.6（远低于0，比用均值还差）</div></div></div>
+    </div>
+    <p style="margin-top:14px;font-size:13.5px">线性回归 R² 为负，说明它完全无法处理长尾分布与非线性关系；
+      随机森林能解释约一半方差，在噪声极大的电影市场已属可用水平。</p>
+  </div>
+
+  <div class="card">
+    <h3>评估结果 · 任务 B：预测豆瓣评分</h3>
+    <table>
+      <tr><th>模型</th><th>RMSE ↓</th><th>MAE ↓</th><th>R² ↑</th><th>MAPE ↓</th></tr>
+      <tr><td>线性回归</td><td>1.31</td><td>1.04</td><td>0.290</td><td>21.3%</td></tr>
+      <tr><td><b>随机森林</b></td><td>1.04</td><td>0.80</td><td class="win">0.549</td><td class="win">16.7%</td></tr>
+    </table>
+    <p style="margin-top:14px;font-size:13.5px">随机森林 MAPE 仅 16.7%（平均误差约 1 分）。评分更多取决于剧本、演技等
+      难以量化的内容因素，仅靠客观元数据存在预测天花板——<b style="color:var(--accent2)">这正是引入大模型做内容分析的价值所在</b>。</p>
+  </div>
+
+  <div class="card">
+    <h3>关键洞察：特征工程带来 100%+ 提升</h3>
+    <div class="chart">
+      <div class="bar-row"><span class="name">7 个特征</span>
+        <div class="bar-track"><div class="bar-fill bo" style="width:37%">CV R² = 0.37</div></div></div>
+      <div class="bar-row"><span class="name">40 个特征</span>
+        <div class="bar-track"><div class="bar-fill bg" style="width:75%">CV R² = 0.75</div></div></div>
+    </div>
+    <p class="chart-cap">增加百度衍生统计量 + 类型 one-hot 编码后，随机森林评价人数预测 CV R² 翻倍</p>
+  </div>
+
+  <div class="card">
+    <h3>模型评估图表（matplotlib 生成）</h3>
+    <div class="grid2" style="grid-template-columns:1fr 1fr;gap:16px">
+      <div class="img-wrap">
+        <img src="movie-prediction/models/evaluation/pred_vs_actual_rf_reviews.png" alt="RF评价人数预测"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ pred_vs_actual_rf_reviews.png</div>
+        <div class="cap"><b>随机森林 · 评价人数</b>　预测值 vs 真实值，点越贴近对角线越准</div>
+      </div>
+      <div class="img-wrap">
+        <img src="movie-prediction/models/evaluation/pred_vs_actual_lr_reviews.png" alt="LR评价人数预测"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ pred_vs_actual_lr_reviews.png</div>
+        <div class="cap"><b>线性回归 · 评价人数</b>　散点严重偏离对角线，预测失效</div>
+      </div>
+      <div class="img-wrap">
+        <img src="movie-prediction/models/evaluation/pred_vs_actual_rf_rating.png" alt="RF评分预测"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ pred_vs_actual_rf_rating.png</div>
+        <div class="cap"><b>随机森林 · 评分</b>　散点向对角线收拢</div>
+      </div>
+      <div class="img-wrap">
+        <img src="movie-prediction/models/evaluation/feature_importance_reviews.png" alt="特征重要性"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ feature_importance_reviews.png</div>
+        <div class="cap"><b>特征重要性 · 评价人数</b>　百度搜索指数贡献最大</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 四、智能分析 ===== -->
+<section id="s4">
+  <div class="sec-head"><span class="no">04</span><h2>大模型 API 调用与智能分析</h2></div>
+  <div class="sec-sub">DeepSeek API · 剧情简介语义打标（对应要求 3）</div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>设计思路</h3>
+      <p>传统类型标签（动作、爱情）较粗糙，无法刻画"催泪""合家欢""沉重压抑"这类贴近观众情感体验的特征。
+        调用 <b style="color:var(--accent)">DeepSeek（deepseek-v4-flash）</b> 对剧情简介做语义分析，
+        自动打上细粒度标签，填补传统特征工程的空白。</p>
+      <h3 style="margin-top:18px">工程实现要点</h3>
+      <ul class="clean">
+        <li><b>批处理</b>：每批 10 部合并为一次请求</li>
+        <li><b>强制 JSON</b>：response_format 保证可解析</li>
+        <li><b>指数退避重试</b>：tenacity，最多 3 次</li>
+        <li><b>断点续传</b>：每 100 部存检查点</li>
+        <li><b>8 线程并发</b>：耗时 60 分钟 → <b style="color:var(--ok)">9 分钟</b></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>39 个预定义标签体系（6 大类）</h3>
+      <p style="font-size:13px;color:var(--sub)">情感类</p>
+      <div class="tag-cloud"><span class="tg s5">催泪</span><span class="tg s5">温馨</span><span class="tg s5">感动</span><span class="tg s5">虐心</span><span class="tg s5">治愈</span></div>
+      <p style="font-size:13px;color:var(--sub);margin-top:10px">风格类</p>
+      <div class="tag-cloud"><span class="tg s2">喜剧</span><span class="tg s2">黑色幽默</span><span class="tg s2">荒诞</span><span class="tg s2">文艺</span><span class="tg s2">商业</span></div>
+      <p style="font-size:13px;color:var(--sub);margin-top:10px">主题类</p>
+      <div class="tag-cloud"><span class="tg s3">主旋律</span><span class="tg s3">青春</span><span class="tg s3">励志</span><span class="tg s3">家庭</span><span class="tg s3">历史</span><span class="tg s3">战争</span><span class="tg s3">都市</span></div>
+      <p style="font-size:13px;color:var(--sub);margin-top:10px">节奏类</p>
+      <div class="tag-cloud"><span class="tg s4">烧脑</span><span class="tg s4">紧张刺激</span><span class="tg s4">轻松搞笑</span><span class="tg s4">沉重压抑</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>提示词设计（System + User 双角色）</h3>
+    <div class="grid2">
+      <div>
+        <p style="font-size:13px;color:var(--accent);font-weight:600">System Prompt</p>
+        <ul class="clean">
+          <li>角色定位：专业电影内容分析助手</li>
+          <li>严格约束：只能从 39 个标签中选，<b>不创造新标签</b></li>
+          <li>限定输出：只返回 JSON</li>
+        </ul>
+      </div>
+      <div>
+        <p style="font-size:13px;color:var(--accent2);font-weight:600">User Prompt</p>
+        <ul class="clean">
+          <li>传入 10 部电影标题+简介（截断 500 字）</li>
+          <li>每部选 1-3 个最符合的标签</li>
+          <li>温度 0.3，输出更稳定</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>分析结果（已完成全量 14,929 部电影标注）</h3>
+    <p><b>高频标签（Top 6，基于真实数据）</b></p>
+    <div class="chart" style="margin-top:14px">
+      <div class="bar-row"><span class="name">动作</span><div class="bar-track"><div class="bar-fill b1" style="width:100%">30.4%（4,542部）</div></div></div>
+      <div class="bar-row"><span class="name">喜剧</span><div class="bar-track"><div class="bar-fill b1" style="width:71%">21.6%（3,219部）</div></div></div>
+      <div class="bar-row"><span class="name">悬疑</span><div class="bar-track"><div class="bar-fill b2" style="width:71%">21.5%（3,214部）</div></div></div>
+      <div class="bar-row"><span class="name">爱情</span><div class="bar-track"><div class="bar-fill b2" style="width:66%">20.0%（2,985部）</div></div></div>
+      <div class="bar-row"><span class="name">犯罪</span><div class="bar-track"><div class="bar-fill bg" style="width:65%">19.9%（2,971部）</div></div></div>
+      <div class="bar-row"><span class="name">沉重压抑</span><div class="bar-track"><div class="bar-fill bo" style="width:40%">12.2%（1,823部）</div></div></div>
+    </div>
+    <p class="chart-cap">来源：tag_statistics.csv，共 14,929 部电影完整标注</p>
+
+    <h3 style="margin-top:22px">档期标签对比：春节档 vs 普通周末</h3>
+    <table style="margin-top:10px">
+      <tr><th>档期</th><th>电影数</th><th>Top 1</th><th>Top 2</th><th>Top 3</th></tr>
+      <tr><td><b>春节档</b></td><td>426</td><td style="color:#3fb950">喜剧(181)</td><td>动作(138)</td><td>奇幻(113)</td></tr>
+      <tr><td>国庆档</td><td>352</td><td>动作(125)</td><td>奇幻(80)</td><td>悬疑(70)</td></tr>
+      <tr><td>五一档</td><td>231</td><td>动作(69)</td><td>悬疑(61)</td><td>犯罪(51)</td></tr>
+      <tr><td>暑期档</td><td>2,438</td><td>动作(861)</td><td>喜剧(561)</td><td>悬疑(547)</td></tr>
+      <tr><td>普通周末</td><td>1,756</td><td>动作(535)</td><td>犯罪(396)</td><td>喜剧(395)</td></tr>
+    </table>
+    <p style="margin-top:14px"><b>核心发现</b>：春节档"喜剧"高居 Top1（181/426部，占比 42.5%），
+      而普通周末 Top1 是"动作"、Top2 是"犯罪"——大模型分析在数据层面量化验证了
+      "春节档需要合家欢喜剧氛围"的市场直觉。此外同为"犯罪"题材，大模型进一步细分出
+      "沉重压抑"的写实派与"紧张刺激"的商业派，精度远超传统类型标签。</p>
+  </div>
+
+  <div class="card">
+    <h3>四张可视化分析图表</h3>
+    <div class="grid2" style="grid-template-columns:1fr 1fr;gap:16px">
+      <div class="img-wrap">
+        <img src="llm-analysis/visualizations/tag_distribution.png" alt="标签频率分布"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ llm-analysis/visualizations/tag_distribution.png</div>
+        <div class="cap"><b>图1　标签频率分布</b><br>Top 20 标签出现频率，动作/喜剧/悬疑领跑</div>
+      </div>
+      <div class="img-wrap">
+        <img src="llm-analysis/visualizations/schedule_tag_heatmap.png" alt="档期-标签热力图"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ llm-analysis/visualizations/schedule_tag_heatmap.png</div>
+        <div class="cap"><b>图2　档期 × 标签热力图</b><br>不同档期的标签浓度对比，春节档喜剧明显偏高</div>
+      </div>
+      <div class="img-wrap">
+        <img src="llm-analysis/visualizations/tag_performance.png" alt="标签性能散点图"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ llm-analysis/visualizations/tag_performance.png</div>
+        <div class="cap"><b>图3　标签性能散点图</b><br>各标签对应的平均评分 vs 平均评价人数</div>
+      </div>
+      <div class="img-wrap">
+        <img src="llm-analysis/visualizations/tag_cooccurrence.png" alt="标签共现网络"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-fallback">⚠ llm-analysis/visualizations/tag_cooccurrence.png</div>
+        <div class="cap"><b>图4　标签共现网络</b><br>边越粗说明两标签越频繁同时出现</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 五、实验结论 ===== -->
+<section id="s5">
+  <div class="sec-head"><span class="no">05</span><h2>实验结论</h2></div>
+  <div class="sec-sub">六项核心发现</div>
+  <div class="concl">
+    <div class="item"><div class="h">1 · 市场关注度高度集中</div>
+      <div class="b">评价人数呈长尾分布，少数爆款占据绝大多数关注，必须配合对数变换与非线性模型才能有效建模。</div></div>
+    <div class="item"><div class="h">2 · 前期热度是最强预测信号</div>
+      <div class="b">上映前 7 天百度搜索指数均值是预测评价人数最重要的特征，前期热度能有效转化为实际关注。</div></div>
+    <div class="item"><div class="h">3 · 档期效应真实存在</div>
+      <div class="b">热门档期关注度显著更高，但各档期评分差异小——档期带来的是流量红利，而非质量背书。</div></div>
+    <div class="item"><div class="h">4 · 特征工程是决定性因素</div>
+      <div class="b">特征 7→40 个后 CV R² 从 0.37 升至 0.75，提升超 100%。特征质量比算法调参更重要。</div></div>
+    <div class="item"><div class="h">5 · 集成模型显著优于线性模型</div>
+      <div class="b">随机森林全面超越线性回归，说明数据中存在大量非线性关系与特征交互。</div></div>
+    <div class="item"><div class="h">6 · 大模型弥补结构化特征盲区</div>
+      <div class="b">传统模型无法"读懂"剧本，大模型能从简介提取情感基调，二者互补构成完整决策支持。</div></div>
+  </div>
+</section>
+
+<!-- ===== 六、心得体会 ===== -->
+<section id="s6">
+  <div class="sec-head"><span class="no">06</span><h2>心得体会</h2></div>
+  <div class="sec-sub">困难解决 · 传统模型 vs 大模型对比</div>
+
+  <div class="card">
+    <h3>过程中遇到的四个困难</h3>
+    <div class="grid2">
+      <ul class="clean">
+        <li><b>中文字体乱码</b>：matplotlib 默认不支持中文，用 FontProperties 显式指定微软雅黑路径解决。</li>
+        <li><b>pandas 填充失效（最隐蔽）</b>：CoW 机制下 <code>df[col].fillna(inplace=True)</code> 作用在临时副本被丢弃，改赋值写法解决。</li>
+      </ul>
+      <ul class="clean">
+        <li><b>线性回归 R² 负数</b>：目标变量极度右偏，爆款主导损失函数，用 log1p + 随机森林解决。</li>
+        <li><b>API 调用慢</b>：串行 60 分钟 → 8 线程并发 9 分钟（独立客户端 + 互斥锁）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>传统模型 vs 大模型</h3>
+    <table class="vs-table">
+      <tr><th>维度</th><th>传统机器学习（随机森林）</th><th>大模型（DeepSeek）</th></tr>
+      <tr><td>输入数据</td><td>结构化数值/类别特征</td><td>非结构化自然语言文本</td></tr>
+      <tr><td>核心优势</td><td>可量化评估、特征可解释</td><td>理解语义、处理语言</td></tr>
+      <tr><td>主要局限</td><td>无法理解内容含义</td><td>成本高、不可量化评估</td></tr>
+      <tr><td>可解释性</td><td class="win">强（特征重要性）</td><td>弱（黑盒）</td></tr>
+      <tr><td>边际成本</td><td class="win">训练后接近零</td><td>按调用量持续付费</td></tr>
+      <tr><td>本项目作用</td><td>预测热度/评分</td><td>挖掘情感标签</td></tr>
+    </table>
+    <p style="margin-top:16px">两者不是替代而是<b style="color:var(--accent)">互补</b>关系：传统模型回答"这部电影会有多火"，
+      大模型回答"这部电影是什么情绪基调"，二者结合才构成完整的决策支持系统。
+      <b style="color:var(--accent2)">选择正确的工具，比调参更重要。</b></p>
+  </div>
+
+  <div class="card">
+    <h3>总结</h3>
+    <p>通过这次大作业，我完整走了一遍"数据采集 → 清洗 → 探索性分析 → 特征工程 → 建模预测 → 大模型智能分析"的
+      数据科学全流程。最大的收获是：遇到报错不能慌，要静下心定位根因——很多看似玄学的 bug，
+      背后都有清晰的技术原因，<b>搞明白一个真正的根因，比盲目试错十次都有价值</b>。</p>
+  </div>
+</section>
+
+<footer>
+  智能数据分析与决策支持系统 · 中国电影市场数据分析<br>
+  计算思维与人工智能期末大作业 · 李志鹏 · 人工智能 2501<br>
+  <span style="font-size:11px;opacity:.6">数据来源：豆瓣电影 + 百度指数　|　技术栈：Python · Pandas · Scikit-learn · DeepSeek API</span>
+</footer>
+
+<script>
+  // 进入视口时触发条形图动画
+  const bars=document.querySelectorAll('.bar-fill');
+  bars.forEach(b=>{const w=b.style.width;b.style.width='0';
+    b.dataset.w=w;});
+  const io=new IntersectionObserver((es)=>{
+    es.forEach(e=>{if(e.isIntersecting){
+      const f=e.target;setTimeout(()=>{f.style.width=f.dataset.w},80);
+      io.unobserve(f);}});
+  },{threshold:.3});
+  bars.forEach(b=>io.observe(b));
+</script>
+</body>
+</html>
