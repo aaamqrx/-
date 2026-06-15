@@ -1,0 +1,436 @@
+# -*- coding: utf-8 -*-
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+import config
+
+import json
+import os
+import random
+import re
+import time
+from uuid import uuid4
+
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+
+def sanitize_filename(filename):
+    """处理Windows非法字符"""
+    invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|']
+    for char in invalid_chars:
+        filename = filename.replace(char, '_')
+    return filename[:100]
+
+
+def extract_subject_id(url):
+    """从详情链接中提取豆瓣subject id"""
+    match = re.search(r"/subject/(\d+)/", str(url))
+    return match.group(1) if match else ""
+
+
+def normalize_subject_id(value):
+    """规范化subject_id，兼容Excel读取后的数字格式"""
+    if pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return ""
+    match = re.search(r"(\d+)", text)
+    return match.group(1) if match else text
+
+
+def is_html_file_usable(html_path):
+    """判断本地HTML缓存是否可直接复用"""
+    if html_path is None or not html_path.exists() or not html_path.is_file():
+        return False
+
+    try:
+        if html_path.stat().st_size == 0:
+            return False
+        with open(html_path, "r", encoding="utf-8", errors="ignore") as f:
+            html_text = f.read()
+    except Exception:
+        return False
+
+    if not html_text or not html_text.strip():
+        return False
+
+    try:
+        page_type, _ = classify_html_page(html_text)
+    except Exception:
+        return False
+    return page_type == "valid"
+
+
+
+def build_global_subject_index():
+    """扫描整个 html_cache，按 subject_id 建立候选缓存路径索引"""
+    subject_index = {}
+    scanned_count = 0
+    print("🔎 正在扫描已有HTML缓存...")
+    for html_file in config.HTML_DIR.glob("**/*.html"):
+        scanned_count += 1
+        if scanned_count % 2000 == 0:
+            print(f"   已扫描 {scanned_count} 个HTML文件...")
+        try:
+            match = re.match(r"(\d+)_", html_file.name)
+            if not match:
+                continue
+            subject_id = match.group(1)
+            subject_index.setdefault(subject_id, []).append(html_file)
+        except Exception:
+            continue
+    print(f"✅ 缓存扫描完成：共扫描 {scanned_count} 个HTML文件，建立 {len(subject_index)} 个 subject_id 索引")
+    return subject_index
+
+
+
+def get_indexed_html_paths(global_subject_index, subject_id):
+    """兼容 subject_id -> Path 和 subject_id -> [Path, ...] 两种索引结构"""
+    if not global_subject_index or not subject_id:
+        return []
+
+    cached_paths = global_subject_index.get(subject_id, [])
+    if isinstance(cached_paths, Path):
+        return [cached_paths]
+    if isinstance(cached_paths, (list, tuple, set)):
+        return list(cached_paths)
+    return [cached_paths] if cached_paths else []
+
+
+
+def remember_cached_html(global_subject_index, subject_id, html_path):
+    """将新下载的HTML写回全局索引"""
+    if not global_subject_index or not subject_id:
+        return
+
+    cached_paths = get_indexed_html_paths(global_subject_index, subject_id)
+    if html_path not in cached_paths:
+        cached_paths.append(html_path)
+    global_subject_index[subject_id] = cached_paths
+
+
+
+def find_existing_html(type_dir, movie_name, url, subject_id="", global_subject_index=None):
+    """查找已存在的可复用HTML，确保断点续传判断和命名规则一致"""
+    subject_id = normalize_subject_id(subject_id) or extract_subject_id(url)
+    if subject_id:
+        for cached_path in get_indexed_html_paths(global_subject_index, subject_id):
+            if is_html_file_usable(cached_path):
+                return cached_path
+        matches = sorted(type_dir.glob(f"{subject_id}_*.html"))
+        for match in matches:
+            if is_html_file_usable(match):
+                return match
+
+    safe_name = sanitize_filename(str(movie_name)) or "untitled"
+    direct_path = type_dir / f"{safe_name}.html"
+    if is_html_file_usable(direct_path):
+        return direct_path
+
+    matches = sorted(type_dir.glob(f"{safe_name}_*.html"))
+    for match in matches:
+        if is_html_file_usable(match):
+            return match
+
+    return None
+
+
+
+def find_bad_html_target(type_dir, movie_name, url, subject_id="", global_subject_index=None):
+    """查找应被覆盖的坏缓存HTML"""
+    subject_id = normalize_subject_id(subject_id) or extract_subject_id(url)
+    if subject_id:
+        matches = sorted(type_dir.glob(f"{subject_id}_*.html"))
+        for match in matches:
+            if not is_html_file_usable(match):
+                return match
+
+        for cached_path in get_indexed_html_paths(global_subject_index, subject_id):
+            if cached_path.exists() and not is_html_file_usable(cached_path):
+                return cached_path
+
+    safe_name = sanitize_filename(str(movie_name)) or "untitled"
+    direct_path = type_dir / f"{safe_name}.html"
+    if direct_path.exists() and not is_html_file_usable(direct_path):
+        return direct_path
+
+    matches = sorted(type_dir.glob(f"{safe_name}_*.html"))
+    for match in matches:
+        if not is_html_file_usable(match):
+            return match
+
+    return None
+
+
+
+def build_html_path(type_dir, movie_name, url, subject_id="", global_subject_index=None):
+    """生成稳定的HTML保存路径，优先覆盖坏缓存"""
+    bad_target = find_bad_html_target(type_dir, movie_name, url, subject_id, global_subject_index=global_subject_index)
+    if bad_target is not None:
+        return bad_target
+
+    safe_name = sanitize_filename(str(movie_name)) or "untitled"
+    subject_id = normalize_subject_id(subject_id) or extract_subject_id(url)
+
+    if subject_id:
+        return type_dir / f"{subject_id}_{safe_name}.html"
+
+    html_path = type_dir / f"{safe_name}.html"
+    if not html_path.exists() or not is_html_file_usable(html_path):
+        return html_path
+
+    counter = 2
+    while True:
+        candidate = type_dir / f"{safe_name}_{counter}.html"
+        if not candidate.exists() or not is_html_file_usable(candidate):
+            return candidate
+        counter += 1
+
+
+def create_session():
+    """创建带基础重试能力的会话"""
+    session = requests.Session()
+    session.headers.update(config.HEADERS)
+    session.cookies.update(config.COOKIES)
+
+    retry = Retry(
+        total=2,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
+def classify_html_page(html_text):
+    """将页面分为有效、风控拦截或普通无效页面"""
+    if not html_text or not html_text.strip():
+        return "invalid", "页面内容为空"
+
+    blocked_keywords = [
+        "禁止访问",
+        "异常请求",
+        "验证码",
+        "访问受限",
+        "检测到有异常请求",
+        "异常请求从你的IP发出",
+    ]
+    for keyword in blocked_keywords:
+        if keyword in html_text:
+            return "blocked", f"页面包含拦截提示：{keyword}"
+
+    invalid_keywords = ["页面不存在", "条目不存在", "登录豆瓣"]
+    for keyword in invalid_keywords:
+        if keyword in html_text:
+            return "invalid", f"页面包含无效提示：{keyword}"
+
+    soup = BeautifulSoup(html_text, "html.parser")
+    title = soup.title.get_text(strip=True) if soup.title else ""
+    if any(keyword in title for keyword in ["禁止访问", "访问受限", "异常请求"]):
+        return "blocked", f"页面标题异常：{title[:30] or '无标题'}"
+    if "登录豆瓣" in title:
+        return "invalid", f"页面标题异常：{title[:30] or '无标题'}"
+    if "豆瓣" not in title:
+        return "invalid", f"页面标题异常：{title[:30] or '无标题'}"
+
+    has_movie_json = any(
+        "Movie" in ((script.string or script.get_text() or ""))
+        for script in soup.find_all("script", attrs={"type": "application/ld+json"})
+    )
+    has_movie_signals = (
+        soup.find("div", id="info")
+        or soup.find("a", attrs={"rel": "v:directedBy"})
+        or soup.find("span", attrs={"property": "v:runtime"})
+        or soup.find("span", attrs={"property": "v:itemreviewed"})
+        or has_movie_json
+    )
+    if has_movie_signals:
+        return "valid", ""
+
+    if len(html_text.strip()) < 4096:
+        return "invalid", "页面体积过小且缺少电影详情结构"
+    return "invalid", "缺少电影详情结构"
+
+
+
+def write_html_atomically(html_path, html_text):
+    """先写临时文件，再原子替换正式HTML"""
+    temp_path = html_path.with_name(f".{html_path.name}.{uuid4().hex}.tmp")
+    try:
+        with open(temp_path, "w", encoding="utf-8") as f:
+            f.write(html_text)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                pass
+
+        if not is_html_file_usable(temp_path):
+            raise ValueError("保存后的HTML校验失败")
+
+        os.replace(temp_path, html_path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def sleep_normal_delay():
+    time.sleep(random.uniform(config.DELAY_MIN, config.DELAY_MAX))
+
+
+def sleep_batch_pause():
+    pause_seconds = random.uniform(config.BATCH_PAUSE_MIN, config.BATCH_PAUSE_MAX)
+    print(f"⏸️ 批次暂停 {pause_seconds:.0f} 秒，降低风控概率...")
+    time.sleep(pause_seconds)
+
+
+def sleep_block_pause():
+    pause_seconds = random.uniform(config.BLOCK_PAUSE_MIN, config.BLOCK_PAUSE_MAX)
+    print(f"⏸️ 连续命中风控，暂停 {pause_seconds:.0f} 秒后继续...")
+    time.sleep(pause_seconds)
+
+
+def fetch_movie_html(session, movie_name, url):
+    """下载单个电影页面，遇到风控页时有限次退避重试"""
+    for attempt in range(config.BLOCK_RETRY_COUNT + 1):
+        response = session.get(url, timeout=config.REQUEST_TIMEOUT)
+        response.encoding = "utf-8"
+        print(f"   状态码: {response.status_code}")
+        response.raise_for_status()
+
+        try:
+            page_type, reason = classify_html_page(response.text)
+        except Exception as e:
+            return "invalid", "", f"页面校验失败：{str(e)[:80]}"
+        if page_type == "valid":
+            return "valid", response.text, ""
+
+        if page_type == "blocked" and attempt < config.BLOCK_RETRY_COUNT:
+            retry_pause = config.BLOCK_RETRY_PAUSES[min(attempt, len(config.BLOCK_RETRY_PAUSES) - 1)]
+            print(f"   ⚠️ 命中风控：{reason}，{retry_pause} 秒后重试...")
+            time.sleep(retry_pause)
+            continue
+
+        return page_type, "", reason
+
+    return "invalid", "", "未知页面状态"
+
+
+def is_blocked_request_exception(error):
+    """判断请求异常是否属于豆瓣风控拦截"""
+    error_text = str(error).lower()
+    blocked_markers = ["sec.douban.com", "max retries exceeded"]
+    return any(marker in error_text for marker in blocked_markers)
+
+
+if __name__ == "__main__":
+    print("=" * 50)
+    print("第3步：下载电影详情页HTML")
+    print("=" * 50)
+
+    session = create_session()
+    global_subject_index = build_global_subject_index()
+
+    for excel_file in config.FILTERED_DIR.glob("china_*.xlsx"):
+        movie_type = excel_file.stem.replace("china_", "")
+        if movie_type not in config.MOVIE_TYPES:
+            continue
+
+        type_name = config.MOVIE_TYPES[movie_type]["name"]
+        type_dir = config.HTML_DIR / movie_type
+        type_dir.mkdir(parents=True, exist_ok=True)
+
+        df = pd.read_excel(excel_file)
+        df = df[df["详情链接"].notna()].reset_index(drop=True)
+
+        print(f"\n正在下载 {type_name}，共 {len(df)} 部...")
+        success_count = 0
+        skip_count = 0
+        fail_count = 0
+        blocked_count = 0
+        consecutive_blocked = 0
+
+        for idx, row in df.iterrows():
+            movie_name = row["电影名"]
+            url = row["详情链接"]
+            subject_id = normalize_subject_id(row.get("subject_id", "") if hasattr(row, "get") else "")
+            existing_html = find_existing_html(
+                type_dir,
+                movie_name,
+                url,
+                subject_id,
+                global_subject_index=global_subject_index,
+            )
+
+            if existing_html is not None:
+                print(f"⏩ [{idx + 1}/{len(df)}] 已存在，跳过：{movie_name} -> {existing_html.name}")
+                skip_count += 1
+                continue
+
+            if idx > 0 and idx % config.BATCH_SIZE == 0:
+                sleep_batch_pause()
+
+            html_path = build_html_path(type_dir, movie_name, url, subject_id, global_subject_index=global_subject_index)
+
+            try:
+                print(f"🔍 [{idx + 1}/{len(df)}] 正在请求：{movie_name}")
+                print(f"   URL: {url}")
+                page_type, html_text, reason = fetch_movie_html(session, movie_name, url)
+
+                if page_type == "valid":
+                    write_html_atomically(html_path, html_text)
+
+                    if subject_id:
+                        remember_cached_html(global_subject_index, subject_id, html_path)
+
+                    print(f"✅ [{idx + 1}/{len(df)}] 下载成功：{movie_name} -> {html_path.name}")
+                    success_count += 1
+                    consecutive_blocked = 0
+                elif page_type == "blocked":
+                    print(f"❌ [{idx + 1}/{len(df)}] 页面被拦截：{movie_name} - {reason}")
+                    fail_count += 1
+                    blocked_count += 1
+                    consecutive_blocked += 1
+
+                    if consecutive_blocked >= config.STOP_BLOCKED_THRESHOLD:
+                        print("🛑 连续多次命中风控，建议更新 Cookie 后再继续运行。")
+                        break
+                    if consecutive_blocked >= config.BLOCKED_THRESHOLD:
+                        sleep_block_pause()
+                else:
+                    print(f"❌ [{idx + 1}/{len(df)}] 页面无效：{movie_name} - {reason}")
+                    fail_count += 1
+                    consecutive_blocked = 0
+
+            except Exception as e:
+                if is_blocked_request_exception(e):
+                    reason = str(e)[:120]
+                    print(f"❌ [{idx + 1}/{len(df)}] 请求命中风控：{movie_name} - {reason}")
+                    fail_count += 1
+                    blocked_count += 1
+                    consecutive_blocked += 1
+
+                    if consecutive_blocked >= config.STOP_BLOCKED_THRESHOLD:
+                        print("🛑 连续多次命中风控，建议更新 Cookie 后再继续运行。")
+                        break
+                    if consecutive_blocked >= config.BLOCKED_THRESHOLD:
+                        sleep_block_pause()
+                else:
+                    print(f"❌ [{idx + 1}/{len(df)}] 下载失败：{movie_name} - {str(e)[:80]}")
+                    fail_count += 1
+                    consecutive_blocked = 0
+
+            sleep_normal_delay()
+
+        print(
+            f"✅ {type_name} 完成：新增成功 {success_count} 部，已跳过 {skip_count} 部，失败 {fail_count} 部，其中风控拦截 {blocked_count} 部"
+        )

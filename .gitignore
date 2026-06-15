@@ -1,0 +1,40 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 敏感配置（含 Cookie / API Key）
+doban-data/config.py
+llm-analysis/.env
+
+# 大数据缓存
+doban-data/html_cache/
+doban-data/baidu_cache/
+
+# 中间数据（有最终表就够了）
+doban-data/data/raw/
+doban-data/data/filtered/
+doban-data/data/baidu/
+movie-prediction/data/processed/
+llm-analysis/data/output/
+
+# 旧版脚本
+doban-data/get_original_all.py
+doban-data/parse_html_to_excel.py
+doban-data/save_china_movie_html.py
+
+# 系统文件
+.DS_Store
+Thumbs.db
+~$*
+*.tmp

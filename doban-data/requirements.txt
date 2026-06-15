@@ -1,0 +1,9 @@
+pandas
+requests
+beautifulsoup4
+openpyxl
+chinesecalendar
+qdata
+matplotlib
+seaborn
+numpy
